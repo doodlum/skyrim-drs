@@ -1,6 +1,12 @@
 #pragma once
 
 #include <dxgi.h>
+#include <d3d11.h>
+
+#pragma warning(push)
+#pragma warning(disable: 4828)
+#include <NVAPI/nvapi.h>
+#pragma warning(pop)
 
 #include <adl/adl_defines.h>
 #include <adl/adl_sdk.h>
@@ -18,6 +24,18 @@ public:
 	void  Initialize();
 	float GetGPUUsage();
 
+	enum class GPUType
+	{
+		NVIDIA,
+		AMD,
+		INTEL,
+		UNKNOWN
+	};
+
+	GPUType GetGPUType();
+	bool GetReflexEnabled();
+
+
 private:
 	GPUInfo(){};
 
@@ -31,17 +49,12 @@ private:
 
 	// NVAPI
 
-#define NVAPI_MAX_PHYSICAL_GPUS 64
-#define NVAPI_MAX_USAGES_PER_GPU 34
+	#define NVAPI_MAX_USAGES_PER_GPU 34
 
 	typedef int* (*NVAPI_QueryInterface_t)(unsigned int offset);
-	typedef int (*NVAPI_Initialize_t)();
-	typedef int (*NVAPI_EnumPhysicalGPUs_t)(int** handles, int* count);
 	typedef int (*NVAPI_GPU_GetUsages_t)(int* handle, unsigned int* usages);
 
 	NVAPI_QueryInterface_t   NVAPI_QueryInterface = NULL;
-	NVAPI_Initialize_t       NVAPI_Initialize = NULL;
-	NVAPI_EnumPhysicalGPUs_t NVAPI_EnumPhysicalGPUs = NULL;
 	NVAPI_GPU_GetUsages_t    NVAPI_GPU_GetUsages = NULL;
 
 	int          NVAPI_gpuCount = 0;
@@ -84,14 +97,6 @@ private:
 	float        ADL_GetGPUUsage(int GpuIndex);
 
 	// Shared
-
-	enum class GPUType
-	{
-		NVIDIA,
-		INTEL,
-		AMD,
-		UNKNOWN
-	};
 
 	GPUType gpuType = GPUType::UNKNOWN;
 };

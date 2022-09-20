@@ -1,37 +1,40 @@
 
+#include <ENB/ENBSeriesAPI.h>
+#include <ReflexAPI.h>
+
 #include "DRS.h"
-//#include "d3d_hook.h"
 
-void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
+ReflexAPI* g_Reflex = nullptr;
+ENB_API::ENBSDKALT1001* g_ENB = nullptr;
+
+static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
-	//switch (a_msg->type) {
-	//case SKSE::MessagingInterface::kPostLoad:
+	switch (a_msg->type) {
+	case SKSE::MessagingInterface::kPostLoad:
+		g_Reflex = reinterpret_cast<ReflexAPI*>(RequestReflexAPI());
+		if (g_Reflex) {
+			logger::info("Obtained Reflex API");
+		} else
+			logger::info("Unable to acquire Reflex API");
 
-	//	ShadowBoost::GetSingleton()->g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
-	//	if (ShadowBoost::GetSingleton()->g_ENB) {
-	//		logger::info("Obtained ENB API");
-	//		ShadowBoost::GetSingleton()->g_ENB->SetCallbackFunction([](ENBCallbackType calltype) {
-	//			switch (calltype) {
-	//			case ENBCallbackType::ENBCallback_PostLoad:
-	//				ShadowBoost::GetSingleton()->LoadJSON();
-	//				break;
-	//			case ENBCallbackType::ENBCallback_PreSave:
-	//				ShadowBoost::GetSingleton()->SaveJSON();
-	//				break;
-	//			default:
-	//				ShadowBoost::GetSingleton()->UpdateUI();
-	//				break;
-	//			}
-	//		});
-	//	} else
-	//		logger::info("Unable to acquire ENB API");
+		g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
+		if (g_ENB) {
+			logger::info("Obtained ENB API");
+			g_ENB->SetCallbackFunction([](ENBCallbackType calltype) {
+				switch (calltype) {
+				case ENBCallbackType::ENBCallback_PostLoad:;
+					DRS::GetSingleton()->UpdateUI();
+					break;
+				case ENBCallbackType::ENBCallback_PostReset:
+					DRS::GetSingleton()->UpdateUI();
+					break;
+				}
+			});
+		} else
+			logger::info("Unable to acquire ENB API");
 
-	//	break;
-
-	//case SKSE::MessagingInterface::kDataLoaded:
-	//	ShadowBoost::GetSingleton()->Start();
-	//	break;
-	//}
+		break;
+	}
 	DRS::GetSingleton()->MessageHandler(a_msg);
 }
 
@@ -40,13 +43,11 @@ void PatchD3D11();
 void Init()
 {
 	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
-	//GPUInfo::GetSingleton()->Initialize();
+	PatchD3D11();
 	DRS::InstallHooks();
 	MenuOpenCloseEventHandler::Register();
-	GPUInfo::GetSingleton()->Initialize();
-	PatchD3D11();
-	//Hook::D3D::Register();
 }
+
 void InitializeLog()
 {
 #ifndef NDEBUG
@@ -77,9 +78,9 @@ void InitializeLog()
 
 EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
-//#ifndef NDEBUG
-//	while (!IsDebuggerPresent()) {};
-//#endif
+#ifndef NDEBUG
+	while (!IsDebuggerPresent()) {};
+#endif
 
 	InitializeLog();
 

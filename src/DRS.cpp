@@ -1,31 +1,37 @@
 #include "DRS.h"
 
+#include <ReflexAPI.h>
+extern ReflexAPI* g_Reflex;
+
 #include "Nukem/GpuTimer.h"
+
+#include <ENB/ENBSeriesAPI.h>
+#include <ENB/AntTweakBar.h>
 
 
 void DRS::LoadSettings()
 {
-	std::ifstream i(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
-	i >> JSONSettings;
+	//std::ifstream i(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
+	//i >> JSONSettings;
 
-	AutoDynamicResolutionEnabled->data.b = JSONSettings["DynamicResolutionEnabled"];
-	HighestScaleFactor = JSONSettings["HighestScaleFactor"];
-	LowestScaleFactor = JSONSettings["LowestScaleFactor"];
-	TargetFPS = JSONSettings["TargetFPS"];
+	//AutoDynamicResolutionEnabled->data.b = JSONSettings["DynamicResolutionEnabled"];
+	//HighestScaleFactor = JSONSettings["HighestScaleFactor"];
+	//LowestScaleFactor = JSONSettings["LowestScaleFactor"];
+	//TargetFPS = JSONSettings["TargetFPS"];
 
 	ResetScale();
 }
 
 void DRS::SaveSettings()
 {
-	std::ofstream o(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
+	//std::ofstream o(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
 
-	JSONSettings["DynamicResolutionEnabled"] = AutoDynamicResolutionEnabled->GetBool();
-	JSONSettings["HighestScaleFactor"] = HighestScaleFactor;
-	JSONSettings["LowestScaleFactor"] = LowestScaleFactor;
-	JSONSettings["TargetFPS"] = TargetFPS;
+	//JSONSettings["DynamicResolutionEnabled"] = AutoDynamicResolutionEnabled->GetBool();
+	//JSONSettings["HighestScaleFactor"] = HighestScaleFactor;
+	//JSONSettings["LowestScaleFactor"] = LowestScaleFactor;
+	//JSONSettings["TargetFPS"] = TargetFPS;
 
-	o << JSONSettings.dump(1);
+	//o << JSONSettings.dump(1);
 }
 
 void DRS::GetGameSettings()
@@ -36,42 +42,38 @@ void DRS::GetGameSettings()
 
 void DRS::Update()
 {
-	//float gpuFrameInnerWorkTime = g_GPUTimers.GetGPUTimeInMS(0) / 1000.0f;
-	//float gpuUsagePercent = GPUInfo::GetSingleton()->GetGPUUsage() / 100.0f;
-	//bool  enabled = HaveUpdatedAveragedUsage(gpuUsagePercent) && g_GPUFrameInnerWorkTimer.HaveUpdatedAveragedIntervalTime(g_DeviceContext, &gpuFrameInnerWorkTime);
-	//bool enabled = HaveUpdatedAveragedUsage(gpuUsagePercent);
-
 	float gpuFrameInnerWorkTime;
 	float gpuUsagePercent;
 	bool  enabled = HaveUpdatedAveragedData(gpuFrameInnerWorkTime, gpuUsagePercent);
-	if (reset)
+	if (reset || !enabled)
 		ResetScale();
-	else
-		ControlResolution(gpuFrameInnerWorkTime, gpuUsagePercent, enabled);
+	else if (enabled)
+		ControlResolution(gpuFrameInnerWorkTime, gpuUsagePercent);
 }
 
-void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent, bool a_enabled)
+void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent)
 {
-	float desiredFrameTime = 1000 / TargetFPS;
-	float estGPUTime = std::clamp(a_gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
-	float unboundedGPUTime = estGPUTime * a_gpuUsagePercent;
+	float desiredFrameTime = 1000 / fTargetFPS;
 	float assumedGPUtime;
-	if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
-		auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
-		assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale);
+	if (g_Reflex && g_Reflex->GetReflexEnabled()){
+		assumedGPUtime = a_gpuFrameInnerWorkTime;
 	} else {
-		assumedGPUtime = estGPUTime;
+		float estGPUTime = std::clamp(a_gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
+		float unboundedGPUTime = estGPUTime * a_gpuUsagePercent;
+		if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
+			auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
+			assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale);
+		} else {
+			assumedGPUtime = estGPUTime;
+		}
+		logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {} Assumed Real GPU Time: {}", estGPUTime, unboundedGPUTime, assumedGPUtime);
 	}
-	estGPUTime = a_gpuFrameInnerWorkTime * 1000;
 
 	if (prevGPUFrameTime != 0) {
 		float headroom = desiredFrameTime - assumedGPUtime;
 		float GPUTimeDelta = assumedGPUtime - prevGPUFrameTime;
+		logger::debug("Headroom: {} GPU Time Delta: {}", headroom, GPUTimeDelta);
 
-		logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {} Assumed Real GPU Time: {} Headroom: {} GPU Time Delta: {}", estGPUTime, unboundedGPUTime, assumedGPUtime, headroom, GPUTimeDelta);
-
-		if (!a_enabled)
-			return;
 		// If headroom is negative, we've exceeded target and need to scale down.
 		if (headroom < 0.0) {
 			ScaleRaiseCounter = 0;
@@ -91,8 +93,8 @@ void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePerce
 				if (GPUTimeDelta < 0.0) {
 					ScaleRaiseCounter += ScaleRaiseCounterBigIncrement;
 				} else {
-					float headroomThreshold = estGPUTime * HeadroomThreshold;
-					float deltaThreshold = estGPUTime * DeltaThreshold;
+					float headroomThreshold = assumedGPUtime * HeadroomThreshold;
+					float deltaThreshold = assumedGPUtime * DeltaThreshold;
 
 					// If we're too close to target or the delta is too large, do nothing out of concern that we could scale up and exceed target.
 					// Otherwise, slow increment towards a scale up.
@@ -115,7 +117,7 @@ void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePerce
 		}
 		currentScaleFactor = std::clamp(currentScaleFactor, LowestScaleFactor, HighestScaleFactor);
 	}
-	prevGPUFrameTime = estGPUTime;
+	prevGPUFrameTime = assumedGPUtime;
 	logger::debug("Current scale factor {}", currentScaleFactor);
 }
 
@@ -124,7 +126,7 @@ bool DRS::HaveUpdatedAveragedData(float& a_avgFrameTime, float& a_avgUsageTiming
 	bool badframe = false;
 	a_avgUsageTiming = 0.0f;
 	for (int i = keepNumFrames - 1; i > 0; i--) {
-		if (usagePerFrame[i] == 0)
+		if (!usagePerFrame[i])
 			badframe = true;
 		usagePerFrame[i] = usagePerFrame[i - 1];
 		a_avgUsageTiming += usagePerFrame[i];
@@ -138,13 +140,26 @@ bool DRS::HaveUpdatedAveragedData(float& a_avgFrameTime, float& a_avgUsageTiming
 	badframe = false;
 	a_avgFrameTime = 0.0f;
 	for (int i = keepNumFrames - 1; i > 0; i--) {
-		if (frameTimes[i] == 0)
+		if (!frameTimes[i])
 			badframe = true;
 		frameTimes[i] = frameTimes[i - 1];
 		a_avgFrameTime += frameTimes[i];
 	}
-	frameTimes[0] = g_GPUTimers.GetGPUTimeInMS(0) / 1000.0f;
-	if (badframe)
+	if (g_Reflex && g_Reflex->GetReflexEnabled()) {
+		NV_LATENCY_RESULT_PARAMS
+		latencyResults = {};
+		latencyResults.version = NV_LATENCY_RESULT_PARAMS_VER;
+		auto valid = g_Reflex->GetLatencyReport(&latencyResults);
+		if (valid) {
+			frameTimes[0] = (float)(latencyResults.frameReport->gpuActiveRenderTimeUs / 1000);
+			logger::debug("Active Render Time {} GPU Render Time {}", frameTimes[0], latencyResults.frameReport->gpuFrameTimeUs / 1000);
+		} else {
+			frameTimes[0] = 0;
+		}
+	} else {
+		frameTimes[0] = g_GPUTimers.GetGPUTimeInMS(0) / 1000.0f;
+	}
+	if (badframe || !frameTimes[0])
 		return false;
 	a_avgFrameTime += frameTimes[0];
 	a_avgFrameTime /= keepNumFrames;
@@ -159,6 +174,7 @@ void DRS::ResetScale()
 		frameTimes[i] = 0;
 	for (int i = 0; i < keepNumFrames; i++)
 		usagePerFrame[i] = 0;
+	prevGPUFrameTime = 0;
 }
 
 void DRS::SetDRS([[maybe_unused]] BSGraphics::State* a_state)
@@ -169,32 +185,12 @@ void DRS::SetDRS([[maybe_unused]] BSGraphics::State* a_state)
 		a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 		a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
 	} else {
+		a_state->fDynamicResolutionCurrentHeightScale = 1;
+		a_state->fDynamicResolutionCurrentWidthScale = 1;
 		a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
 		a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
 	}
 }
-
-
-//float DRS::GetGPUFrameTime()
-//{
-//	logger::debug("Current scale factor {}", BSGraphics::gState.fDynamicResolutionCurrentHeightScale);
-//	float gpuFrameInnerWorkTime;
-//	float gpuUsagePercent = GPUInfo::GetSingleton()->GetGPUUsage() / 100.0f;
-//	//if (HaveUpdatedAveragedUsage(gpuUsagePercent) && g_GPUFrameInnerWorkTimer.HaveUpdatedAveragedIntervalTime(g_DeviceContext, &gpuFrameInnerWorkTime)) {
-//	if (HaveUpdatedAveragedUsage(gpuUsagePercent) ) {
-//		float desiredFrameTime = 1000 / TargetFPS;
-//		float estGPUTime = std::clamp(gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
-//		float unboundedGPUTime = estGPUTime * gpuUsagePercent;
-//		float assumedGPUtime;
-//		if ((estGPUTime - desiredFrameTime) <= HeadroomThreshold) {
-//			assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, desiredFrameTime / estGPUTime);
-//		} else {
-//			assumedGPUtime = estGPUTime;
-//		}
-//		return assumedGPUtime / 10000;
-//	}
-//	return 0.0f;
-//}
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
@@ -214,6 +210,14 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	}
 }
 
+extern ENB_API::ENBSDKALT1001* g_ENB;
+
+void DRS::UpdateUI()
+{
+	auto bar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarEffects);
+	g_ENB->TwAddVarRW(bar, "Target FPS", ETwType::TW_TYPE_FLOAT, &fTargetFPS, "group='Dynamic Resolution Scaling' min=1.00 max=1000.0 step=1.00 precision=0.01");
+}
+
 
 // Fader Menu
 // Mist Menu
@@ -222,7 +226,7 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == "Fader Menu") {
+	if (a_event->menuName == "Mist Menu") {
 		if (a_event->opening)
 			DRS::GetSingleton()->reset = true;
 		else

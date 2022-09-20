@@ -1,56 +1,69 @@
 #include "GPUInfo.h"
-#include "Intel/GPUTimer.h"
 
+#include "Nukem/GpuTimer.h"
+#include "DRS.h"
 
+extern ID3D11DeviceContext* g_DeviceContext;
+extern ID3D11Device*        g_Device;
+extern IDXGISwapChain*      g_SwapChain;
+
+// Shared
+
+float GPUInfo::GetGPUUsage()
+{
+	switch (gpuType) {
+	case (GPUType::NVIDIA):
+		return NVAPI_GetGPUUsage(0);
+		break;
+	case (GPUType::AMD):
+		return ADL_GetGPUUsage(0);
+		break;
+	}
+	return 100.0f;
+}
+
+GPUInfo::GPUType GPUInfo::GetGPUType()
+{
+	return gpuType;
+}
+
+bool GPUInfo::GetReflexEnabled()
+{
+	return false;
+}
+
+void GPUInfo::Initialize()
+{
+	if (InitializeNVAPI()) {
+		logger::info("NVAPI Initialised");
+		NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS] = { 0 };
+		NvU32               gpuCount = 0;
+		// Get all the Physical GPU Handles
+		NvAPI_EnumPhysicalGPUs(nvGPUHandle, &gpuCount);
+		if (gpuCount > 0) {
+			logger::info("Found {} NVIDIA GPU(s)", gpuCount);
+			gpuType = GPUType::NVIDIA;
+			logger::info("Using NVAPI");
+			return;
+		} else {
+			logger::error("Did not find a NVIDIA GPU");
+		}
+	}
+
+	if (InitializeADL()) {
+		logger::info("ADL Initialised");
+		if (auto gpu_count = ADL_CountActiveGPUs()) {
+			logger::info("Found {} AMD GPU(s)", gpu_count);
+			gpuType = GPUType::AMD;
+			logger::info("Using ADL");
+			return;
+		}
+	}
+
+	logger::error("Did not find an NVIDIA or AMD GPU, frame timing reports will be imprecise");
+}
 
 // NVAPI
-
-//bool GPUInfo::InitializeNVAPI()
-//{
-//	auto init = NvAPI_Initialize();
-//	if (init != NvAPI_Status::NVAPI_OK)
-//		return false;
-//
-//	NvPhysicalGpuHandle gpuHandleArray[NVAPI_MAX_PHYSICAL_GPUS];
-//	NvU32               gpuCount;
-//
-//	auto res = NvAPI_EnumPhysicalGPUs(gpuHandleArray, &gpuCount);
-//	if (res != NvAPI_Status::NVAPI_OK)
-//		return false;
-//
-//	nvGPU = gpuHandleArray[0];
-//
-//	return true;
-//}
-//
-//int GPUInfo::NVAPI_CountPhysicalGPUs(void)
-//{
-//	NvPhysicalGpuHandle gpus[64] = {};
-//	NvU32               gpu_count = 0;
-//
-//	auto ret = NvAPI_EnumPhysicalGPUs(gpus, &gpu_count);
-//	if (ret != NvAPI_Status::NVAPI_OK) {
-//		return 0;
-//	}
-//
-//	return gpu_count;
-//}
-//
-//#define NVAPI_GPU_UTILIZATION_DOMAIN_GPU 0
-//
-//float GPUInfo::NVAPI_GetGPUUsage()
-//{
-//	NV_GPU_DYNAMIC_PSTATES_INFO_EX
-//	psinfoex = {};
-//	psinfoex.version = NV_GPU_DYNAMIC_PSTATES_INFO_EX_VER;
-//
-//	auto ret = NvAPI_GPU_GetDynamicPstatesInfoEx(nvGPU, &psinfoex);
-//	if (ret != NvAPI_Status::NVAPI_OK) {
-//		return 100.0f;
-//	}
-//
-//	return (float) psinfoex.utilization[NVAPI_GPU_UTILIZATION_DOMAIN_GPU].percentage;
-//}
 
 bool GPUInfo::InitializeNVAPI()
 {
@@ -59,23 +72,16 @@ bool GPUInfo::InitializeNVAPI()
 	if (!hNVAPI_DLL)
 		return false;
 
-	// nvapi_QueryInterface is a function used to retrieve other internal functions in nvapi.dll
+	NvAPI_Status ret = NVAPI_OK;
+
+	ret = NvAPI_Initialize();
+
 	NVAPI_QueryInterface = (NVAPI_QueryInterface_t)GetProcAddress(hNVAPI_DLL, "nvapi_QueryInterface");
 
-	// Some useful internal functions that aren't exported by nvapi.dll
-	NVAPI_Initialize = (NVAPI_Initialize_t)(*NVAPI_QueryInterface)(0x0150E828);
-	NVAPI_EnumPhysicalGPUs = (NVAPI_EnumPhysicalGPUs_t)(*NVAPI_QueryInterface)(0xE5AC921F);
+	// Useful internal function that isn't exported by nvapi.dll
 	NVAPI_GPU_GetUsages = (NVAPI_GPU_GetUsages_t)(*NVAPI_QueryInterface)(0x189A1FDF);
 
-	if (NVAPI_Initialize != nullptr &&
-		NVAPI_EnumPhysicalGPUs != nullptr &&
-		NVAPI_GPU_GetUsages != nullptr) {
-		(*NVAPI_Initialize)();
-		(*NVAPI_EnumPhysicalGPUs)(NVAPI_gpuHandles, &NVAPI_gpuCount);
-		return true;
-	}
-
-	return false;
+	return ret == NVAPI_OK && NVAPI_GPU_GetUsages != nullptr;
 };
 
 float GPUInfo::NVAPI_GetGPUUsage(int GpuIndex)
@@ -206,44 +212,4 @@ float GPUInfo::ADL_GetGPUUsage(int GpuIndex)
 	ADL_Overdrive5_CurrentActivity_Get(pAdapter->iAdapterIndex, &activity);
 
 	return (float)activity.iActivityPercent;
-}
-
-// Shared
-
-float GPUInfo::GetGPUUsage()
-{
-	switch (gpuType) {
-	case (GPUType::NVIDIA):
-		return NVAPI_GetGPUUsage(0);
-		break;
-	case (GPUType::AMD):
-		return ADL_GetGPUUsage(0);
-		break;
-	}
-	return 100.0f;
-}
-
-void GPUInfo::Initialize()
-{
-	if (InitializeNVAPI()) {
-		logger::info("NVAPI Initialised");
-		if (NVAPI_gpuCount > 0) {
-			logger::info("Found {} NVIDIA GPUs", NVAPI_gpuCount);
-			gpuType = GPUType::NVIDIA;
-			logger::info("Using NVAPI");
-			return;
-		}
-	}
-
-	if (InitializeADL()) {
-		logger::info("ADL Initialised");
-		if (auto gpu_count = ADL_CountActiveGPUs()) {
-			logger::info("Found {} AMD GPUs", gpu_count);
-			gpuType = GPUType::AMD;
-			logger::info("Using ADL");
-			return;
-		}
-	}
-
-	logger::error("Did not find an NVIDIA or AMD GPU, frame timing reports will be imprecise");
 }

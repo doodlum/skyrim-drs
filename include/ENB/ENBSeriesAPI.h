@@ -3,7 +3,7 @@
 #include <psapi.h>
 
 #include "ENBSeriesSDK.h"
-#include <AntTweakBar.h>
+#include "AntTweakBar.h"
 
 using namespace ENB_SDK;
 
@@ -18,11 +18,12 @@ namespace ENB_API
 
 	enum class ENBWindowType : int
 	{
-		ShortcutsWindow,
-		GeneralWindow,
-		MainWindow,
-		ShadersWindow,
-		WeathersWindow
+		TW_HELP,
+		EditorBarButtons,  // GeneralWindow
+		EditorBar1,        // MainWindow
+		EditorBar2,		   // Weathers?
+		EditorBarObjects,
+		EditorBarEffects
 	};
 
 	// ENB Series' modder interface
@@ -153,6 +154,7 @@ namespace ENB_API
 		typedef TwBar* (*_TwGetBarByIndex)(int barIndex);
 		typedef TwBar* (*_TwGetBarByName)(const char* barName);
 		typedef int (*_TwRefreshBar)(TwBar* bar);
+		typedef const char* (*_TwGetBarName)(const TwBar* bar);
 
 		TwBar* TwNewBar(const char* barName)
 		{
@@ -238,6 +240,11 @@ namespace ENB_API
 		int TwSetParam(TwBar* bar, const char* varName, const char* paramName, TwParamValueType paramValueType, unsigned int inValueCount, const void* inValues)
 		{
 			return reinterpret_cast<_TwSetParam>(GetProcAddress(enbmodule, "TwSetParam"))(bar, varName, paramName, paramValueType, inValueCount, inValues);
+		}
+
+		const char* TwGetBarName(const TwBar* bar)
+		{
+			return reinterpret_cast<_TwGetBarName>(GetProcAddress(enbmodule, "TwGetBarName"))(bar);
 		}
 	};
 

@@ -23,19 +23,19 @@ namespace ENB_SDK
 	{
 		long size = 0;
 		if (type == ENBParameterType::ENBParam_FLOAT)
-			size = 4;
+			size = sizeof(float);
 		if (type == ENBParameterType::ENBParam_INT)
-			size = 4;
+			size = sizeof(int);
 		if (type == ENBParameterType::ENBParam_HEX)
-			size = 4;
+			size = sizeof(DWORD);
 		if (type == ENBParameterType::ENBParam_BOOL)
-			size = 4;
+			size = sizeof(BOOL);
 		if (type == ENBParameterType::ENBParam_COLOR3)
-			size = 4 * 3;
+			size = sizeof(float) * 3;
 		if (type == ENBParameterType::ENBParam_COLOR4)
-			size = 4 * 4;
+			size = sizeof(float) * 4;
 		if (type == ENBParameterType::ENBParam_VECTOR3)
-			size = 4 * 3;
+			size = sizeof(float) * 3;
 		return size;
 	}
 

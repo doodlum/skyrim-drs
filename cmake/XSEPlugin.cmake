@@ -81,7 +81,7 @@ set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_STATIC_RUNTIME ON)
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
-	add_compile_definitions(_UNICODE)
+	# add_compile_definitions(_UNICODE)
 
 	target_compile_definitions(${PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:DEBUG>")
 
@@ -146,6 +146,7 @@ if (BUILD_SKYRIM)
 			magic_enum::magic_enum
 			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
+			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/nvapi64.lib
 	)
 else()
 	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)

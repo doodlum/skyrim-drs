@@ -1,5 +1,7 @@
 #pragma once
 
+//#undef NDEBUG
+
 #pragma warning(push)
 #pragma warning(disable: 5105)
 #pragma warning(disable: 4189)

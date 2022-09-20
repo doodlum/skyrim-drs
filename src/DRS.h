@@ -43,9 +43,10 @@ public:
 	std::shared_mutex mtx;
 	RE::Setting*      AutoDynamicResolutionEnabled;
 
-	json JSONSettings;
+	float fTargetFPS = 60.0f;
 
-	float TargetFPS = 60;
+	//json JSONSettings;
+
 	float HighestScaleFactor = 1.0f;
 	float LowestScaleFactor = 0.05f;
 
@@ -80,7 +81,7 @@ public:
 	void GetGameSettings();
 
 	void Update();
-	void ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent, bool a_enabled);
+	void ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent);
 
 	void ResetScale();
 
@@ -88,15 +89,16 @@ public:
 
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
+	void UpdateUI();
+
 
 protected:
 	struct Hooks
 	{
 		struct Main_SetDRS
 		{
-			static void thunk([[maybe_unused]] BSGraphics::State* a_state)
+			static void thunk(BSGraphics::State* a_state)
 			{
-				GetSingleton()->Update();
 				GetSingleton()->SetDRS(a_state);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
@@ -105,6 +107,7 @@ protected:
 		static void Install()
 		{
 			stl::write_thunk_call<Main_SetDRS>(REL::RelocationID(35556, 36555).address() + REL::Relocate(0x5A2, 0x2D));
+
 		}
 	};
 
