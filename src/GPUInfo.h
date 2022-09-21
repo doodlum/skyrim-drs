@@ -1,6 +1,6 @@
 #pragma once
 
-ma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3d11.lib")
 #include <dxgi.h>
 #include <d3d11.h>
 
