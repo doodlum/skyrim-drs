@@ -1,116 +1,105 @@
 #include "DRS.h"
 
+#include <SimpleIni.h>
+
+#include <ENB/AntTweakBar.h>
+#include <ENB/ENBSeriesAPI.h>
+extern ENB_API::ENBSDKALT1001* g_ENB;
+
 #include <ReflexAPI.h>
 extern ReflexAPI* g_Reflex;
 
 #include "Nukem/GpuTimer.h"
 
-#include <ENB/ENBSeriesAPI.h>
-#include <ENB/AntTweakBar.h>
+#define GetSettingInt(a_section, a_setting, a_default) a_setting = (int)ini.GetLongValue(a_section, #a_setting, a_default);
+#define SetSettingInt(a_section, a_setting) ini.SetLongValue(a_section, #a_setting, a_setting);
 
+#define GetSettingFloat(a_section, a_setting, a_default) a_setting = (float)ini.GetDoubleValue(a_section, #a_setting, a_default);
+#define SetSettingFloat(a_section, a_setting) ini.SetDoubleValue(a_section, #a_setting, a_setting);
 
-void DRS::LoadSettings()
+#define GetSettingBool(a_section, a_setting, a_default) a_setting = ini.GetBoolValue(a_section, #a_setting, a_default);
+#define SetSettingBool(a_section, a_setting) ini.SetBoolValue(a_section, #a_setting, a_setting);
+
+void DRS::LoadINI()
 {
-	//std::ifstream i(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
-	//i >> JSONSettings;
-
-	//AutoDynamicResolutionEnabled->data.b = JSONSettings["DynamicResolutionEnabled"];
-	//HighestScaleFactor = JSONSettings["HighestScaleFactor"];
-	//LowestScaleFactor = JSONSettings["LowestScaleFactor"];
-	//TargetFPS = JSONSettings["TargetFPS"];
-
+	CSimpleIniA ini;
+	ini.SetUnicode();
+	ini.LoadFile(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.ini");
+	GetSettingInt("Settings", iTargetFPS, 60);
+	GetSettingFloat("Settings", fHighestScaleFactor, 1.0f);
+	GetSettingFloat("Settings", fLowestScaleFactor, 0.7f);
+	GetSettingBool("Settings", bEnableWithENB, false);
 	ResetScale();
-}
-
-void DRS::SaveSettings()
-{
-	//std::ofstream o(L"Data\\SKSE\\Plugins\\DynamicResolutionScaling.json");
-
-	//JSONSettings["DynamicResolutionEnabled"] = AutoDynamicResolutionEnabled->GetBool();
-	//JSONSettings["HighestScaleFactor"] = HighestScaleFactor;
-	//JSONSettings["LowestScaleFactor"] = LowestScaleFactor;
-	//JSONSettings["TargetFPS"] = TargetFPS;
-
-	//o << JSONSettings.dump(1);
 }
 
 void DRS::GetGameSettings()
 {
 	auto ini = RE::INISettingCollection::GetSingleton();
-	AutoDynamicResolutionEnabled = ini->GetSetting("bEnableAutoDynamicResolution:Display");
+	bEnableAutoDynamicResolution = ini->GetSetting("bEnableAutoDynamicResolution:Display");
+	bEnableAutoDynamicResolution->data.b = true;
 }
 
 void DRS::Update()
 {
 	if (reset)
 		ResetScale();
-	else
+	else if (!(RE::UI::GetSingleton() && RE::UI::GetSingleton()->GameIsPaused()))  // Ignore paused game which skews frametimes
 		ControlResolution();
 }
 
 void DRS::ControlResolution()
 {
 	float usage = GPUInfo::GetSingleton()->GetGPUUsage();
-	if (usage <= 0.01f) // When switching windows this can sometimes return 0.01 which creates massive delta spikes
+	if (usage <= 0.01f)  // When switching windows this can sometimes return 0.01 which creates delta spikes
 		return;
 
-	float desiredFrameTime = 1000.0f / fTargetFPS;
-	float assumedGPUtime = g_GPUTimers.GetGPUTimeInMS(0);
+	//assumedGPUtime = std::lerp(assumedGPUtime * usage, assumedGPUtime, lastCPUFrameTime / desiredFrameTime);
 
-	assumedGPUtime = std::lerp(assumedGPUtime * usage, assumedGPUtime, lastCPUFrameTime / desiredFrameTime);
-
+	float desiredFrameTime = 1000.0f / (float)iTargetFPS;
+	float estGPUTime = g_GPUTimers.GetGPUTimeInMS(0);
+	float unboundedGPUTime = estGPUTime * usage;
+	if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
+		auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
+		estGPUTime = std::lerp(std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale), estGPUTime, lastCPUFrameTime / desiredFrameTime);
+	} 
+	logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {}", estGPUTime, unboundedGPUTime);
 	logger::debug("CPU frametime {} GPU usage {}", lastCPUFrameTime, usage);
-	
-	//if (g_Reflex && g_Reflex->GetReflexEnabled()){
-	//	assumedGPUtime = a_gpuFrameInnerWorkTime;
-	//} else {
-	//	float estGPUTime = std::clamp(a_gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
-	//	float unboundedGPUTime = estGPUTime * a_gpuUsagePercent;
-	//	if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
-	//		auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
-	//		assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale);
-	//	} else {
-	//		assumedGPUtime = estGPUTime;
-	//	}
-	//	logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {} Assumed Real GPU Time: {}", estGPUTime, unboundedGPUTime, assumedGPUtime);
-	//}
 
 	if (prevGPUFrameTime != 0) {
-		float headroom = desiredFrameTime - assumedGPUtime;
-		float GPUTimeDelta = assumedGPUtime - prevGPUFrameTime;
+		float headroom = desiredFrameTime - estGPUTime;
+		float GPUTimeDelta = estGPUTime - prevGPUFrameTime;
 		logger::debug("Headroom: {} GPU Time Delta: {}", headroom, GPUTimeDelta);
 
 		// If headroom is negative, we've exceeded target and need to scale down.
 		if (headroom < 0.0) {
-			ScaleRaiseCounter = 0;
+			scaleRaiseCounter = 0;
 
 			// Since headroom is guaranteed to be negative here, we can add rather than negate and subtract.
-			float scaleDecreaseFactor = headroom / desiredFrameTime;
+			float scaleDecreaseFactor = std::lerp(headroom / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes
 			currentScaleFactor = std::clamp(currentScaleFactor + scaleDecreaseFactor, 0.0f, 1.0f);
 		} else {
 			// If delta is greater than headroom, we expect to exceed target and need to scale down.
 			if (GPUTimeDelta > headroom) {
-				ScaleRaiseCounter = 0;
-
-				float scaleDecreaseFactor = GPUTimeDelta / desiredFrameTime;
+				scaleRaiseCounter = 0;
+				float scaleDecreaseFactor = std::lerp(GPUTimeDelta / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes
 				currentScaleFactor = std::clamp(currentScaleFactor - scaleDecreaseFactor, 0.0f, 1.0f);
 			} else {
 				// If delta is negative, then perf is moving in a good direction and we can increment to scale up faster.
 				if (GPUTimeDelta < 0.0) {
-					ScaleRaiseCounter += ScaleRaiseCounterBigIncrement;
+					scaleRaiseCounter += ScaleRaiseCounterBigIncrement * g_deltaTimeRealTime;
 				} else {
-					float headroomThreshold = assumedGPUtime * HeadroomThreshold;
-					float deltaThreshold = assumedGPUtime * DeltaThreshold;
+					float headroomThreshold = estGPUTime * HeadroomThreshold;
+					float deltaThreshold = estGPUTime * DeltaThreshold;
 
 					// If we're too close to target or the delta is too large, do nothing out of concern that we could scale up and exceed target.
 					// Otherwise, slow increment towards a scale up.
 					if ((headroom > headroomThreshold) && (GPUTimeDelta < deltaThreshold)) {
-						ScaleRaiseCounter += ScaleRaiseCounterSmallIncrement;
+						scaleRaiseCounter += ScaleRaiseCounterSmallIncrement * g_deltaTimeRealTime;
 					}
 				}
 
-				if (ScaleRaiseCounter >= ScaleRaiseCounterLimit) {
-					ScaleRaiseCounter = 0;
+				if (scaleRaiseCounter >= ScaleRaiseCounterLimit) {
+					scaleRaiseCounter = 0;
 
 					// Headroom as percent of target is unlikely to use the full 0-1 range, so clamp on user settings and then remap to 0-1.
 					float headroomPercent = headroom / desiredFrameTime;
@@ -121,94 +110,45 @@ void DRS::ControlResolution()
 				}
 			}
 		}
-		currentScaleFactor = std::clamp(currentScaleFactor, LowestScaleFactor, HighestScaleFactor);
+		currentScaleFactor = std::clamp(currentScaleFactor, fLowestScaleFactor, fHighestScaleFactor);
 		logger::debug("Current scale factor {}", currentScaleFactor);
 	}
-	prevGPUFrameTime = assumedGPUtime;
-}
-
-bool DRS::HaveUpdatedAveragedData(float& a_avgFrameTime, float& a_avgUsageTiming)
-{
-	bool badframe = false;
-	a_avgUsageTiming = 0.0f;
-	for (int i = keepNumFrames - 1; i > 0; i--) {
-		if (!usagePerFrame[i])
-			badframe = true;
-		usagePerFrame[i] = usagePerFrame[i - 1];
-		a_avgUsageTiming += usagePerFrame[i];
-	}
-	usagePerFrame[0] = GPUInfo::GetSingleton()->GetGPUUsage() / 100.0f;
-	if (badframe)
-		return false;
-	a_avgUsageTiming += usagePerFrame[0];
-	a_avgUsageTiming /= keepNumFrames;
-
-	badframe = false;
-	a_avgFrameTime = 0.0f;
-	for (int i = keepNumFrames - 1; i > 0; i--) {
-		if (!frameTimes[i])
-			badframe = true;
-		frameTimes[i] = frameTimes[i - 1];
-		a_avgFrameTime += frameTimes[i];
-	}
-	if (g_Reflex && g_Reflex->GetReflexEnabled()) {
-		NV_LATENCY_RESULT_PARAMS
-		latencyResults = {};
-		latencyResults.version = NV_LATENCY_RESULT_PARAMS_VER;
-		auto valid = g_Reflex->GetLatencyReport(&latencyResults);
-		if (valid) {
-			frameTimes[0] = (float)(latencyResults.frameReport->gpuActiveRenderTimeUs / 1000);
-			logger::debug("Active Render Time {} GPU Render Time {}", frameTimes[0], latencyResults.frameReport->gpuFrameTimeUs / 1000);
-		} else {
-			frameTimes[0] = 0;
-		}
-	} else {
-		frameTimes[0] = g_GPUTimers.GetGPUTimeInMS(0) / 1000.0f;
-	}
-	if (badframe || !frameTimes[0])
-		return false;
-	a_avgFrameTime += frameTimes[0];
-	a_avgFrameTime /= keepNumFrames;
-	return true;
+	prevGPUFrameTime = estGPUTime;
 }
 
 void DRS::ResetScale()
 {
 	currentScaleFactor = 1.0f;
-	ScaleRaiseCounter = 0;
-	//for (int i = 0; i < keepNumFrames; i++)
-	//	frameTimes[i] = 0;
-	//for (int i = 0; i < keepNumFrames; i++)
-	//	usagePerFrame[i] = 0;
-	prevGPUFrameTime = 0;
+	scaleRaiseCounter = 0;
 }
 
-void DRS::SetDRS([[maybe_unused]] BSGraphics::State* a_state)
+bool GetENBParameterBool(const char* a_filename, const char* a_category, const char* a_keyname)
 {
-	//if (AutoDynamicResolutionEnabled && AutoDynamicResolutionEnabled->GetBool()) {
+	BOOL                  bvalue;
+	ENB_SDK::ENBParameter param;
+	if (g_ENB->GetParameter(a_filename, a_category, a_keyname, &param)) {
+		if (param.Type == ENB_SDK::ENBParameterType::ENBParam_BOOL) {
+			memcpy(&bvalue, param.Data, ENBParameterTypeToSize(ENB_SDK::ENBParameterType::ENBParam_BOOL));
+			return bvalue;
+		}
+	}
+	logger::debug("Could not find ENB parameter {}:{}:{}", a_filename, a_category, a_keyname);
+	return false;
+}
+
+void DRS::SetDRS(BSGraphics::State* a_state)
+{
+	if (bEnableAutoDynamicResolution && bEnableAutoDynamicResolution->GetBool() && (!(g_ENB && GetENBParameterBool("enbseries.ini", "GLOBAL", "UseEffect")) || bEnableWithENB)) {
 		a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
 		a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
 		a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 		a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
-	//a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
-	//a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
-	//a_state->fDynamicResolutionCurrentHeightScale = 0.1;
-	//a_state->fDynamicResolutionCurrentWidthScale = 0.1;
-
-	//logger::info("START");
-	//logger::info("{}", a_state->fDynamicResolutionWidthRatio);
-	//logger::info("{}", a_state->fDynamicResolutionHeightRatio);
-	//logger::info("{}", a_state->fDynamicResolutionCurrentWidthScale);
-	//logger::info("{}", a_state->fDynamicResolutionCurrentHeightScale);
-	//logger::info("{}", a_state->fDynamicResolutionWidthRatio);
-	//logger::info("{}", a_state->fDynamicResolutionPreviousHeightScale);
-	//logger::info("SETDRS");
-	//} else {
-	//	a_state->fDynamicResolutionCurrentHeightScale = 1;
-	//	a_state->fDynamicResolutionCurrentWidthScale = 1;
-	//	a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
-	//	a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
-	//}
+	} else {
+		a_state->fDynamicResolutionPreviousHeightScale = 1.0f;
+		a_state->fDynamicResolutionPreviousWidthScale = 1.0f;
+		a_state->fDynamicResolutionCurrentHeightScale = 1.0f;
+		a_state->fDynamicResolutionCurrentWidthScale = 1.0f;
+	}
 }
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
@@ -216,25 +156,17 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
 		GetGameSettings();
-	//	LoadSettings();
+		LoadINI();
 		break;
 
 	case SKSE::MessagingInterface::kNewGame:
-		//LoadSettings();
+		LoadINI();
 		break;
 
 	case SKSE::MessagingInterface::kPreLoadGame:
-	//	LoadSettings();
+		LoadINI();
 		break;
 	}
-}
-
-extern ENB_API::ENBSDKALT1001* g_ENB;
-
-void DRS::UpdateUI()
-{
-	auto bar = g_ENB->TwGetBarByEnum(ENB_API::ENBWindowType::EditorBarEffects);
-	g_ENB->TwAddVarRW(bar, "Target FPS", ETwType::TW_TYPE_FLOAT, &fTargetFPS, "group='Dynamic Resolution Scaling' min=1.00 max=1000.0 step=1.00 precision=0.01");
 }
 
 void DRS::UpdateCPUFrameTime()
@@ -252,11 +184,12 @@ void DRS::UpdateCPUFrameTime()
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName ==  "Fader Menu") {
-		if (a_event->opening)
+	if (a_event->menuName == "Loading Menu") {
+		if (a_event->opening) {
 			DRS::GetSingleton()->reset = true;
-		else
+		} else {
 			DRS::GetSingleton()->reset = false;
+		}
 	}
 
 	return RE::BSEventNotifyControl::kContinue;

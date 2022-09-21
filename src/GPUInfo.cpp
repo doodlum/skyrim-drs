@@ -61,21 +61,6 @@ void GPUInfo::Initialize()
 
 bool GPUInfo::InitializeNVAPI()
 {
-	//HMODULE hNVAPI_DLL = LoadLibraryA("nvapi64.dll");
-
-	//if (!hNVAPI_DLL)
-	//	return false;
-
-	//NvAPI_Status ret = NVAPI_OK;
-
-	//ret = NvAPI_Initialize();
-
-	//NVAPI_QueryInterface = (NVAPI_QueryInterface_t)GetProcAddress(hNVAPI_DLL, "nvapi_QueryInterface");
-
-	//// Useful internal function that isn't exported by nvapi.dll
-	//NVAPI_GPU_GetUsages = (NVAPI_GPU_GetUsages_t)(*NVAPI_QueryInterface)(0x189A1FDF);
-
-	//return ret == NVAPI_OK && NVAPI_GPU_GetUsages != nullptr;
 	HMODULE hNVAPI_DLL = LoadLibraryA("nvapi64.dll");
 
 	if (!hNVAPI_DLL)

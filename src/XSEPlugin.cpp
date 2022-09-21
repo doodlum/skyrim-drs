@@ -20,16 +20,6 @@ static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
 		if (g_ENB) {
 			logger::info("Obtained ENB API");
-			g_ENB->SetCallbackFunction([](ENBCallbackType calltype) {
-				switch (calltype) {
-				case ENBCallbackType::ENBCallback_PostLoad:;
-					DRS::GetSingleton()->UpdateUI();
-					break;
-				case ENBCallbackType::ENBCallback_PostReset:
-					DRS::GetSingleton()->UpdateUI();
-					break;
-				}
-			});
 		} else
 			logger::info("Unable to acquire ENB API");
 
@@ -65,7 +55,7 @@ void InitializeLog()
 #ifndef NDEBUG
 	const auto level = spdlog::level::trace;
 #else
-	const auto level = spdlog::level::debug;
+	const auto level = spdlog::level::info;
 #endif
 
 	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
