@@ -1,22 +1,13 @@
-
 #include <ENB/ENBSeriesAPI.h>
-#include <ReflexAPI.h>
 
 #include "DRS.h"
 
-ReflexAPI* g_Reflex = nullptr;
 ENB_API::ENBSDKALT1001* g_ENB = nullptr;
 
 static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kPostLoad:
-		g_Reflex = reinterpret_cast<ReflexAPI*>(RequestReflexAPI());
-		if (g_Reflex) {
-			logger::info("Obtained Reflex API");
-		} else
-			logger::info("Unable to acquire Reflex API");
-
 		g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
 		if (g_ENB) {
 			logger::info("Obtained ENB API");

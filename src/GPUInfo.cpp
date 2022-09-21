@@ -1,12 +1,5 @@
 #include "GPUInfo.h"
 
-#include "Nukem/GpuTimer.h"
-#include "DRS.h"
-
-extern ID3D11DeviceContext* g_DeviceContext;
-extern ID3D11Device*        g_Device;
-extern IDXGISwapChain*      g_SwapChain;
-
 // Shared
 
 float GPUInfo::GetGPUUsage()
@@ -25,11 +18,6 @@ float GPUInfo::GetGPUUsage()
 GPUInfo::GPUType GPUInfo::GetGPUType()
 {
 	return gpuType;
-}
-
-bool GPUInfo::GetReflexEnabled()
-{
-	return false;
 }
 
 void GPUInfo::Initialize()

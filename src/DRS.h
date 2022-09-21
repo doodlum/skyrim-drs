@@ -50,12 +50,11 @@ public:
 
 	// Constants
 
-	const float ScaleRaiseCounterLimit = 360 * (1 / 60);
+	const float ScaleRaiseCounterLimit = 360.0f * (1.0f / 60.0f);
 
 	const float ScaleRaiseCounterSmallIncrement = 3;
 	const float ScaleRaiseCounterBigIncrement = 10;
 
-	const float UnboundedHeadroomThreshold = 0.6f;
 	const float HeadroomThreshold = 0.03f;
 	const float DeltaThreshold = 0.035f;
 

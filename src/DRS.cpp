@@ -6,9 +6,6 @@
 #include <ENB/ENBSeriesAPI.h>
 extern ENB_API::ENBSDKALT1001* g_ENB;
 
-#include <ReflexAPI.h>
-extern ReflexAPI* g_Reflex;
-
 #include "Nukem/GpuTimer.h"
 
 #define GetSettingInt(a_section, a_setting, a_default) a_setting = (int)ini.GetLongValue(a_section, #a_setting, a_default);
@@ -52,41 +49,34 @@ void DRS::ControlResolution()
 	float usage = GPUInfo::GetSingleton()->GetGPUUsage();
 	if (usage <= 0.01f)  // When switching windows this can sometimes return 0.01 which creates delta spikes
 		return;
-
-	//assumedGPUtime = std::lerp(assumedGPUtime * usage, assumedGPUtime, lastCPUFrameTime / desiredFrameTime);
-
+	usage = min(usage / 0.97f, 1.0f);  // Target 97% usage
 	float desiredFrameTime = 1000.0f / (float)iTargetFPS;
 	float estGPUTime = g_GPUTimers.GetGPUTimeInMS(0);
-	float unboundedGPUTime = estGPUTime * usage;
-	if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
-		auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
-		estGPUTime = std::lerp(std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale), estGPUTime, lastCPUFrameTime / desiredFrameTime);
-	} 
-	logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {}", estGPUTime, unboundedGPUTime);
-	logger::debug("CPU frametime {} GPU usage {}", lastCPUFrameTime, usage);
+	estGPUTime = std::lerp(estGPUTime * usage, estGPUTime, lastCPUFrameTime / desiredFrameTime);  // Consider CPU limiting GPU maximum performance
 
 	if (prevGPUFrameTime != 0) {
 		float headroom = desiredFrameTime - estGPUTime;
 		float GPUTimeDelta = estGPUTime - prevGPUFrameTime;
-		logger::debug("Headroom: {} GPU Time Delta: {}", headroom, GPUTimeDelta);
 
 		// If headroom is negative, we've exceeded target and need to scale down.
 		if (headroom < 0.0) {
 			scaleRaiseCounter = 0;
 
 			// Since headroom is guaranteed to be negative here, we can add rather than negate and subtract.
-			float scaleDecreaseFactor = std::lerp(headroom / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes
+			float scaleDecreaseFactor = std::lerp(headroom / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes impacting results
+			scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                     // Adjust with respect to time between frames
 			currentScaleFactor = std::clamp(currentScaleFactor + scaleDecreaseFactor, 0.0f, 1.0f);
 		} else {
 			// If delta is greater than headroom, we expect to exceed target and need to scale down.
 			if (GPUTimeDelta > headroom) {
 				scaleRaiseCounter = 0;
-				float scaleDecreaseFactor = std::lerp(GPUTimeDelta / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes
+				float scaleDecreaseFactor = std::lerp(GPUTimeDelta / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes impacting results
+				scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                         // Adjust with respect to time between frames
 				currentScaleFactor = std::clamp(currentScaleFactor - scaleDecreaseFactor, 0.0f, 1.0f);
 			} else {
 				// If delta is negative, then perf is moving in a good direction and we can increment to scale up faster.
 				if (GPUTimeDelta < 0.0) {
-					scaleRaiseCounter += ScaleRaiseCounterBigIncrement * g_deltaTimeRealTime;
+					scaleRaiseCounter += ScaleRaiseCounterBigIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames
 				} else {
 					float headroomThreshold = estGPUTime * HeadroomThreshold;
 					float deltaThreshold = estGPUTime * DeltaThreshold;
@@ -94,7 +84,7 @@ void DRS::ControlResolution()
 					// If we're too close to target or the delta is too large, do nothing out of concern that we could scale up and exceed target.
 					// Otherwise, slow increment towards a scale up.
 					if ((headroom > headroomThreshold) && (GPUTimeDelta < deltaThreshold)) {
-						scaleRaiseCounter += ScaleRaiseCounterSmallIncrement * g_deltaTimeRealTime;
+						scaleRaiseCounter += ScaleRaiseCounterSmallIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames
 					}
 				}
 
@@ -111,7 +101,6 @@ void DRS::ControlResolution()
 			}
 		}
 		currentScaleFactor = std::clamp(currentScaleFactor, fLowestScaleFactor, fHighestScaleFactor);
-		logger::debug("Current scale factor {}", currentScaleFactor);
 	}
 	prevGPUFrameTime = estGPUTime;
 }

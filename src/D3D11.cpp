@@ -1,4 +1,3 @@
-
 #pragma comment(lib, "d3d11.lib")
 #include <d3d11.h>
 #include <dxgi.h>
@@ -28,7 +27,6 @@ HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval
 	g_GPUTimers.StopTimer(g_DeviceContext, 0);
 	g_GPUTimers.EndFrame(g_DeviceContext);
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
-//	logger::info("Frametime {}", g_GPUTimers.GetGPUTimeInMS(0));
 	DRS::GetSingleton()->Update();
 	return hr;
 }

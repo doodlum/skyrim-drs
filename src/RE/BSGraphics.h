@@ -73,17 +73,6 @@ namespace BSGraphics
 	//};
 	//static_assert(sizeof(State) == 0x118);
 
-//struct State
-//	{
-//		char     pad[252];
-//		float    fDynamicResolutionWidthRatio;
-//		float    fDynamicResolutionHeightRatio;
-//		float    fDynamicResolutionCurrentWidthScale;
-//		float    fDynamicResolutionCurrentHeightScale;
-//		float    fDynamicResolutionPreviousWidthScale;
-//		float    fDynamicResolutionPreviousHeightScale;
-//		uint16_t usDynamicResolutionCounter;
-//	};
 	struct State
 	{
 		char     pad[252];
