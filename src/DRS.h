@@ -106,8 +106,9 @@ protected:
 	{
 		struct Main_SetDRS
 		{
-			static void thunk([[maybe_unused]] BSGraphics::State* a_state)
+			static void thunk(BSGraphics::State* a_state)
 			{
+				func(a_state);
 				GetSingleton()->SetDRS(a_state);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;

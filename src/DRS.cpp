@@ -128,8 +128,6 @@ bool GetENBParameterBool(const char* a_filename, const char* a_category, const c
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
 	if (bEnableAutoDynamicResolution && bEnableAutoDynamicResolution->GetBool() && (!(g_ENB && GetENBParameterBool("enbseries.ini", "GLOBAL", "UseEffect")) || bEnableWithENB)) {
-		a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
-		a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
 		a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 		a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
 	} else {
