@@ -42,32 +42,38 @@ void DRS::GetGameSettings()
 
 void DRS::Update()
 {
-	float gpuFrameInnerWorkTime;
-	float gpuUsagePercent;
-	bool  enabled = HaveUpdatedAveragedData(gpuFrameInnerWorkTime, gpuUsagePercent);
-	if (reset || !enabled)
+	if (reset)
 		ResetScale();
-	else if (enabled)
-		ControlResolution(gpuFrameInnerWorkTime, gpuUsagePercent);
+	else
+		ControlResolution();
 }
 
-void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent)
+void DRS::ControlResolution()
 {
-	float desiredFrameTime = 1000 / fTargetFPS;
-	float assumedGPUtime;
-	if (g_Reflex && g_Reflex->GetReflexEnabled()){
-		assumedGPUtime = a_gpuFrameInnerWorkTime;
-	} else {
-		float estGPUTime = std::clamp(a_gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
-		float unboundedGPUTime = estGPUTime * a_gpuUsagePercent;
-		if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
-			auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
-			assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale);
-		} else {
-			assumedGPUtime = estGPUTime;
-		}
-		logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {} Assumed Real GPU Time: {}", estGPUTime, unboundedGPUTime, assumedGPUtime);
-	}
+	float usage = GPUInfo::GetSingleton()->GetGPUUsage();
+	if (usage <= 0.01f) // When switching windows this can sometimes return 0.01 which creates massive delta spikes
+		return;
+
+	float desiredFrameTime = 1000.0f / fTargetFPS;
+	float assumedGPUtime = g_GPUTimers.GetGPUTimeInMS(0);
+
+	assumedGPUtime = std::lerp(assumedGPUtime * usage, assumedGPUtime, lastCPUFrameTime / desiredFrameTime);
+
+	logger::debug("CPU frametime {} GPU usage {}", lastCPUFrameTime, usage);
+	
+	//if (g_Reflex && g_Reflex->GetReflexEnabled()){
+	//	assumedGPUtime = a_gpuFrameInnerWorkTime;
+	//} else {
+	//	float estGPUTime = std::clamp(a_gpuFrameInnerWorkTime * 1000, desiredFrameTime, FLT_MAX);
+	//	float unboundedGPUTime = estGPUTime * a_gpuUsagePercent;
+	//	if ((estGPUTime - desiredFrameTime) <= UnboundedHeadroomThreshold) {
+	//		auto scale = (UnboundedHeadroomThreshold - (estGPUTime - desiredFrameTime)) * (1 / UnboundedHeadroomThreshold);
+	//		assumedGPUtime = std::lerp(estGPUTime, unboundedGPUTime, (desiredFrameTime / estGPUTime) * scale);
+	//	} else {
+	//		assumedGPUtime = estGPUTime;
+	//	}
+	//	logger::debug("Estimated GPU Time: {} Unbounded GPU Time: {} Assumed Real GPU Time: {}", estGPUTime, unboundedGPUTime, assumedGPUtime);
+	//}
 
 	if (prevGPUFrameTime != 0) {
 		float headroom = desiredFrameTime - assumedGPUtime;
@@ -103,7 +109,7 @@ void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePerce
 					}
 				}
 
-				if (ScaleRaiseCounter >= 30) {
+				if (ScaleRaiseCounter >= ScaleRaiseCounterLimit) {
 					ScaleRaiseCounter = 0;
 
 					// Headroom as percent of target is unlikely to use the full 0-1 range, so clamp on user settings and then remap to 0-1.
@@ -116,9 +122,9 @@ void DRS::ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePerce
 			}
 		}
 		currentScaleFactor = std::clamp(currentScaleFactor, LowestScaleFactor, HighestScaleFactor);
+		logger::debug("Current scale factor {}", currentScaleFactor);
 	}
 	prevGPUFrameTime = assumedGPUtime;
-	logger::debug("Current scale factor {}", currentScaleFactor);
 }
 
 bool DRS::HaveUpdatedAveragedData(float& a_avgFrameTime, float& a_avgUsageTiming)
@@ -170,26 +176,39 @@ void DRS::ResetScale()
 {
 	currentScaleFactor = 1.0f;
 	ScaleRaiseCounter = 0;
-	for (int i = 0; i < keepNumFrames; i++)
-		frameTimes[i] = 0;
-	for (int i = 0; i < keepNumFrames; i++)
-		usagePerFrame[i] = 0;
+	//for (int i = 0; i < keepNumFrames; i++)
+	//	frameTimes[i] = 0;
+	//for (int i = 0; i < keepNumFrames; i++)
+	//	usagePerFrame[i] = 0;
 	prevGPUFrameTime = 0;
 }
 
 void DRS::SetDRS([[maybe_unused]] BSGraphics::State* a_state)
 {
-	if (AutoDynamicResolutionEnabled && AutoDynamicResolutionEnabled->GetBool()) {
+	//if (AutoDynamicResolutionEnabled && AutoDynamicResolutionEnabled->GetBool()) {
 		a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
 		a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
 		a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 		a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
-	} else {
-		a_state->fDynamicResolutionCurrentHeightScale = 1;
-		a_state->fDynamicResolutionCurrentWidthScale = 1;
-		a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
-		a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
-	}
+	//a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
+	//a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
+	//a_state->fDynamicResolutionCurrentHeightScale = 0.1;
+	//a_state->fDynamicResolutionCurrentWidthScale = 0.1;
+
+	//logger::info("START");
+	//logger::info("{}", a_state->fDynamicResolutionWidthRatio);
+	//logger::info("{}", a_state->fDynamicResolutionHeightRatio);
+	//logger::info("{}", a_state->fDynamicResolutionCurrentWidthScale);
+	//logger::info("{}", a_state->fDynamicResolutionCurrentHeightScale);
+	//logger::info("{}", a_state->fDynamicResolutionWidthRatio);
+	//logger::info("{}", a_state->fDynamicResolutionPreviousHeightScale);
+	//logger::info("SETDRS");
+	//} else {
+	//	a_state->fDynamicResolutionCurrentHeightScale = 1;
+	//	a_state->fDynamicResolutionCurrentWidthScale = 1;
+	//	a_state->fDynamicResolutionPreviousHeightScale = a_state->fDynamicResolutionCurrentHeightScale;
+	//	a_state->fDynamicResolutionPreviousWidthScale = a_state->fDynamicResolutionCurrentWidthScale;
+	//}
 }
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
@@ -218,6 +237,13 @@ void DRS::UpdateUI()
 	g_ENB->TwAddVarRW(bar, "Target FPS", ETwType::TW_TYPE_FLOAT, &fTargetFPS, "group='Dynamic Resolution Scaling' min=1.00 max=1000.0 step=1.00 precision=0.01");
 }
 
+void DRS::UpdateCPUFrameTime()
+{
+	long long frameEnd = PerformanceCounter();
+	double    elapsedMilliseconds = (double)((frameEnd - frameStart)) / PerformanceFrequency();
+	float     frameTime = (float)elapsedMilliseconds;
+	lastCPUFrameTime = frameTime;
+}
 
 // Fader Menu
 // Mist Menu
@@ -226,7 +252,7 @@ void DRS::UpdateUI()
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == "Mist Menu") {
+	if (a_event->menuName ==  "Fader Menu") {
 		if (a_event->opening)
 			DRS::GetSingleton()->reset = true;
 		else

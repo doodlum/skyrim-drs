@@ -49,12 +49,29 @@ private:
 
 	// NVAPI
 
-	#define NVAPI_MAX_USAGES_PER_GPU 34
+	//#define NVAPI_MAX_USAGES_PER_GPU 34
+
+	//typedef int* (*NVAPI_QueryInterface_t)(unsigned int offset);
+	//typedef int (*NVAPI_GPU_GetUsages_t)(int* handle, unsigned int* usages);
+
+	//NVAPI_QueryInterface_t   NVAPI_QueryInterface = NULL;
+	//NVAPI_GPU_GetUsages_t    NVAPI_GPU_GetUsages = NULL;
+
+	//int          NVAPI_gpuCount = 0;
+	//int*         NVAPI_gpuHandles[NVAPI_MAX_PHYSICAL_GPUS] = { NULL };
+	//unsigned int NVAPI_gpuUsages[NVAPI_MAX_USAGES_PER_GPU] = { 0 };
+
+	#define NVAPI_MAX_PHYSICAL_GPUS 64
+#define NVAPI_MAX_USAGES_PER_GPU 34
 
 	typedef int* (*NVAPI_QueryInterface_t)(unsigned int offset);
+	typedef int (*NVAPI_Initialize_t)();
+	typedef int (*NVAPI_EnumPhysicalGPUs_t)(int** handles, int* count);
 	typedef int (*NVAPI_GPU_GetUsages_t)(int* handle, unsigned int* usages);
 
 	NVAPI_QueryInterface_t   NVAPI_QueryInterface = NULL;
+	NVAPI_Initialize_t       NVAPI_Initialize = NULL;
+	NVAPI_EnumPhysicalGPUs_t NVAPI_EnumPhysicalGPUs = NULL;
 	NVAPI_GPU_GetUsages_t    NVAPI_GPU_GetUsages = NULL;
 
 	int          NVAPI_gpuCount = 0;

@@ -81,7 +81,7 @@ public:
 	void GetGameSettings();
 
 	void Update();
-	void ControlResolution(float a_gpuFrameInnerWorkTime, float a_gpuUsagePercent);
+	void ControlResolution();
 
 	void ResetScale();
 
@@ -91,23 +91,66 @@ public:
 
 	void UpdateUI();
 
+	// Performance Queries
+
+	float lastCPUFrameTime;
+
+	static inline long long PerformanceCounter() noexcept
+	{
+		LARGE_INTEGER li;
+		::QueryPerformanceCounter(&li);
+		return li.QuadPart;
+	}
+
+	static inline long long PerformanceFrequency() noexcept
+	{
+		LARGE_INTEGER li;
+		::QueryPerformanceFrequency(&li);
+		return li.QuadPart;
+	}
+
+	long long frameStart = PerformanceCounter();
+
+	void UpdateCPUFrameTime();
 
 protected:
+
 	struct Hooks
 	{
 		struct Main_SetDRS
 		{
-			static void thunk(BSGraphics::State* a_state)
+			static void thunk([[maybe_unused]] BSGraphics::State* a_state)
 			{
 				GetSingleton()->SetDRS(a_state);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
+		struct Main_Update_Start
+		{
+			static void thunk(INT64 a_unk)
+			{
+				GetSingleton()->frameStart = PerformanceCounter();
+				func(a_unk);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
+		struct Main_Update_Render
+		{
+			static void thunk(RE::Main* a_main)
+			{
+				GetSingleton()->UpdateCPUFrameTime();
+				func(a_main);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
 		static void Install()
 		{
-			stl::write_thunk_call<Main_SetDRS>(REL::RelocationID(35556, 36555).address() + REL::Relocate(0x5A2, 0x2D));
-
+			stl::write_thunk_call<Main_SetDRS>(REL::RelocationID(35556, 36555).address() + REL::Relocate(0x2D, 0x2D));
+			stl::write_thunk_call<Main_Update_Start>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x1E, 0x3E, 0x33));
+			stl::write_thunk_call<Main_Update_Render>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x5D2, 0xA92, 0x678));
 		}
 	};
 

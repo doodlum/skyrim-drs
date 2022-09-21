@@ -13,10 +13,10 @@ float GPUInfo::GetGPUUsage()
 {
 	switch (gpuType) {
 	case (GPUType::NVIDIA):
-		return NVAPI_GetGPUUsage(0);
+		return NVAPI_GetGPUUsage(0) / 100.0f;
 		break;
 	case (GPUType::AMD):
-		return ADL_GetGPUUsage(0);
+		return ADL_GetGPUUsage(0) / 100.0f;
 		break;
 	}
 	return 100.0f;
@@ -36,17 +36,11 @@ void GPUInfo::Initialize()
 {
 	if (InitializeNVAPI()) {
 		logger::info("NVAPI Initialised");
-		NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS] = { 0 };
-		NvU32               gpuCount = 0;
-		// Get all the Physical GPU Handles
-		NvAPI_EnumPhysicalGPUs(nvGPUHandle, &gpuCount);
-		if (gpuCount > 0) {
-			logger::info("Found {} NVIDIA GPU(s)", gpuCount);
+		if (NVAPI_gpuCount > 0) {
+			logger::info("Found {} NVIDIA GPU(s)", NVAPI_gpuCount);
 			gpuType = GPUType::NVIDIA;
 			logger::info("Using NVAPI");
 			return;
-		} else {
-			logger::error("Did not find a NVIDIA GPU");
 		}
 	}
 
@@ -67,21 +61,43 @@ void GPUInfo::Initialize()
 
 bool GPUInfo::InitializeNVAPI()
 {
+	//HMODULE hNVAPI_DLL = LoadLibraryA("nvapi64.dll");
+
+	//if (!hNVAPI_DLL)
+	//	return false;
+
+	//NvAPI_Status ret = NVAPI_OK;
+
+	//ret = NvAPI_Initialize();
+
+	//NVAPI_QueryInterface = (NVAPI_QueryInterface_t)GetProcAddress(hNVAPI_DLL, "nvapi_QueryInterface");
+
+	//// Useful internal function that isn't exported by nvapi.dll
+	//NVAPI_GPU_GetUsages = (NVAPI_GPU_GetUsages_t)(*NVAPI_QueryInterface)(0x189A1FDF);
+
+	//return ret == NVAPI_OK && NVAPI_GPU_GetUsages != nullptr;
 	HMODULE hNVAPI_DLL = LoadLibraryA("nvapi64.dll");
 
 	if (!hNVAPI_DLL)
 		return false;
 
-	NvAPI_Status ret = NVAPI_OK;
-
-	ret = NvAPI_Initialize();
-
+	// nvapi_QueryInterface is a function used to retrieve other internal functions in nvapi.dll
 	NVAPI_QueryInterface = (NVAPI_QueryInterface_t)GetProcAddress(hNVAPI_DLL, "nvapi_QueryInterface");
 
-	// Useful internal function that isn't exported by nvapi.dll
+	// Some useful internal functions that aren't exported by nvapi.dll
+	NVAPI_Initialize = (NVAPI_Initialize_t)(*NVAPI_QueryInterface)(0x0150E828);
+	NVAPI_EnumPhysicalGPUs = (NVAPI_EnumPhysicalGPUs_t)(*NVAPI_QueryInterface)(0xE5AC921F);
 	NVAPI_GPU_GetUsages = (NVAPI_GPU_GetUsages_t)(*NVAPI_QueryInterface)(0x189A1FDF);
 
-	return ret == NVAPI_OK && NVAPI_GPU_GetUsages != nullptr;
+	if (NVAPI_Initialize != nullptr &&
+		NVAPI_EnumPhysicalGPUs != nullptr &&
+		NVAPI_GPU_GetUsages != nullptr) {
+		(*NVAPI_Initialize)();
+		(*NVAPI_EnumPhysicalGPUs)(NVAPI_gpuHandles, &NVAPI_gpuCount);
+		return true;
+	}
+
+	return false;
 };
 
 float GPUInfo::NVAPI_GetGPUUsage(int GpuIndex)
