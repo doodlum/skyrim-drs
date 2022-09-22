@@ -33,7 +33,10 @@ void DRS::GetGameSettings()
 {
 	auto ini = RE::INISettingCollection::GetSingleton();
 	bEnableAutoDynamicResolution = ini->GetSetting("bEnableAutoDynamicResolution:Display");
-	bEnableAutoDynamicResolution->data.b = true;
+	if (bEnableAutoDynamicResolution)
+		bEnableAutoDynamicResolution->data.b = true;
+	else
+		logger::warn("Unable to enable Dynamic Resolution, please enable manually.");
 }
 
 void DRS::Update()
