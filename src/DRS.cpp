@@ -52,7 +52,7 @@ void DRS::ControlResolution()
 	usage = min(usage / 0.97f, 1.0f);  // Target 97% usage
 	float desiredFrameTime = 1000.0f / (float)iTargetFPS;
 	float estGPUTime = g_GPUTimers.GetGPUTimeInMS(0);
-	estGPUTime = std::lerp(estGPUTime * usage, estGPUTime, lastCPUFrameTime / desiredFrameTime);  // Consider CPU limiting GPU maximum performance
+	estGPUTime = std::lerp(estGPUTime * usage, estGPUTime, lastCPUFrameTime / desiredFrameTime);  // Consider CPU making GPU idle, making usage only GPU bound else we risk frame delta spikes
 
 	if (prevGPUFrameTime != 0) {
 		float headroom = desiredFrameTime - estGPUTime;
@@ -64,14 +64,14 @@ void DRS::ControlResolution()
 
 			// Since headroom is guaranteed to be negative here, we can add rather than negate and subtract.
 			float scaleDecreaseFactor = std::lerp(headroom / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes impacting results
-			scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                     // Adjust with respect to time between frames
+			scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                     // Adjust with respect to time between frames. This should be the last frame time, so we account for single frame spikes as well
 			currentScaleFactor = std::clamp(currentScaleFactor + scaleDecreaseFactor, 0.0f, 1.0f);
 		} else {
 			// If delta is greater than headroom, we expect to exceed target and need to scale down.
 			if (GPUTimeDelta > headroom) {
 				scaleRaiseCounter = 0;
 				float scaleDecreaseFactor = std::lerp(GPUTimeDelta / desiredFrameTime, 0.0f, lastCPUFrameTime / desiredFrameTime);  // Accommodate for CPU spikes impacting results
-				scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                         // Adjust with respect to time between frames
+				scaleDecreaseFactor *= g_deltaTimeRealTime;                                                                         // Adjust with respect to time between frames. This should be the last frame time, so we account for single frame spikes as well
 				currentScaleFactor = std::clamp(currentScaleFactor - scaleDecreaseFactor, 0.0f, 1.0f);
 			} else {
 				// If delta is negative, then perf is moving in a good direction and we can increment to scale up faster.
