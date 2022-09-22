@@ -76,7 +76,7 @@ void DRS::ControlResolution()
 			} else {
 				// If delta is negative, then perf is moving in a good direction and we can increment to scale up faster.
 				if (GPUTimeDelta < 0.0) {
-					scaleRaiseCounter += ScaleRaiseCounterBigIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames
+					scaleRaiseCounter += ScaleRaiseCounterBigIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames. This should be the last frame time, so we account for single frame spikes as well
 				} else {
 					float headroomThreshold = estGPUTime * HeadroomThreshold;
 					float deltaThreshold = estGPUTime * DeltaThreshold;
@@ -84,7 +84,7 @@ void DRS::ControlResolution()
 					// If we're too close to target or the delta is too large, do nothing out of concern that we could scale up and exceed target.
 					// Otherwise, slow increment towards a scale up.
 					if ((headroom > headroomThreshold) && (GPUTimeDelta < deltaThreshold)) {
-						scaleRaiseCounter += ScaleRaiseCounterSmallIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames
+						scaleRaiseCounter += ScaleRaiseCounterSmallIncrement * g_deltaTimeRealTime;  // Adjust with respect to time between frames. This should be the last frame time, so we account for single frame spikes as well
 					}
 				}
 
