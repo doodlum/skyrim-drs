@@ -8,4 +8,3 @@ project(
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(XSEPlugin)
-find_package(binary_io CONFIG REQUIRED)
