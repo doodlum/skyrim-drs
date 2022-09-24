@@ -49,7 +49,7 @@ void DRS::ControlResolution()
 	float usage = GPUInfo::GetSingleton()->GetGPUUsage();
 	if (usage <= 0.01f)  // When switching windows this can sometimes return 0.01 which creates delta spikes
 		return;
-	usage = min(usage / 0.97f, 1.0f);  // Target 97% usage
+	usage = std::min(usage / 0.97f, 1.0f);  // Target 97% usage
 	float desiredFrameTime = 1000.0f / (float)iTargetFPS;
 	float estGPUTime = g_GPUTimers.GetGPUTimeInMS(0);
 	estGPUTime = std::lerp(estGPUTime * usage, estGPUTime, lastCPUFrameTime / desiredFrameTime);  // Consider CPU limiting GPU maximum performance
