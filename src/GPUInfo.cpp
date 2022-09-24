@@ -9,7 +9,7 @@ float GPUInfo::GetGPUUsage()
 		return NVAPI_GetGPUUsage(0) / 100.0f;
 		break;
 	case (GPUType::AMD):
-		return ADL_GetGPUUsage(0) / 100.0f;
+		return ADL_GetGPUUsage(0);
 		break;
 	}
 	return 100.0f;
