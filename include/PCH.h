@@ -5,6 +5,7 @@
 #pragma warning(push)
 #pragma warning(disable: 5105)
 #pragma warning(disable: 4189)
+#pragma warning(disable: 4267)
 
 #if defined(FALLOUT4)
 #	include "F4SE/F4SE.h"
@@ -17,16 +18,10 @@
 #else
 #	include "RE/Skyrim.h"
 #	include "SKSE/SKSE.h"
-#	if defined(SKYRIMAE)
-#		define RUNTIME 0
-#	elif defined(SKYRIMVR)
-#		define RUNTIME SKSE::RUNTIME_VR_1_4_15_1
-#	else
-#		define RUNTIME SKSE::RUNTIME_1_5_97
-#	endif
 #endif
 
-#include <ShlObj_core.h>
+#pragma warning(pop)
+
 #include <Windows.h>
 
 #ifdef NDEBUG
@@ -34,8 +29,6 @@
 #else
 #	include <spdlog/sinks/msvc_sink.h>
 #endif
-
-#pragma warning(pop)
 
 using namespace std::literals;
 
