@@ -38,9 +38,12 @@ void DRS::GetGameSettings()
 
 void DRS::Update()
 {
-	if (reset)
+	if (reset) {	
 		ResetScale();
-	else if (!(RE::UI::GetSingleton() && RE::UI::GetSingleton()->GameIsPaused()))  // Ignore paused game which skews frametimes
+		return;
+	}
+
+	if (!(RE::UI::GetSingleton() && RE::UI::GetSingleton()->GameIsPaused()))  // Ignore paused game which skews frametimes
 		ControlResolution();
 }
 
@@ -171,12 +174,13 @@ void DRS::UpdateCPUFrameTime()
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == "Loading Menu") {
-		if (a_event->opening) {
+	if (a_event->menuName == RE::LoadingMenu::MENU_NAME) {
+		if (a_event->opening)
 			DRS::GetSingleton()->reset = true;
-		} else {
+	}
+	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {
+		if (!a_event->opening)
 			DRS::GetSingleton()->reset = false;
-		}
 	}
 
 	return RE::BSEventNotifyControl::kContinue;
