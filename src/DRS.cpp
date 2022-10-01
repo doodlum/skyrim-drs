@@ -40,7 +40,8 @@ void DRS::Update()
 {
 	if (reset) {	
 		ResetScale();
-		return;
+		if (auto ui = RE::UI::GetSingleton(); ui && ui->IsUsingCustomRendering())
+			return;
 	}
 
 	if (!(RE::UI::GetSingleton() && RE::UI::GetSingleton()->GameIsPaused()))  // Ignore paused game which skews frametimes
@@ -181,6 +182,9 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {
 		if (!a_event->opening)
 			DRS::GetSingleton()->reset = false;
+	}
+	else if (a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
+	 	DRS::GetSingleton()->reset = a_event->opening;
 	}
 
 	return RE::BSEventNotifyControl::kContinue;
