@@ -38,14 +38,13 @@ void DRS::GetGameSettings()
 
 void DRS::Update()
 {
-	if (reset) {	
+	if (reset) {
 		ResetScale();
-		if (auto ui = RE::UI::GetSingleton(); ui && ui->IsUsingCustomRendering())
-			return;
+		return;
 	}
-
-	if (!(RE::UI::GetSingleton() && RE::UI::GetSingleton()->GameIsPaused()))  // Ignore paused game which skews frametimes
+	else if (const auto ui = RE::UI::GetSingleton(); !(ui && ui->GameIsPaused())) { // Ignore paused game which skews frametimes
 		ControlResolution();
+	}
 }
 
 void DRS::ControlResolution()
