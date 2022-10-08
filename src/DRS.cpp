@@ -32,13 +32,14 @@ void DRS::LoadINI()
 void DRS::GetGameSettings()
 {
 	bEnableAutoDynamicResolution = RE::GetINISetting("bEnableAutoDynamicResolution:Display");
-	if (bEnableAutoDynamicResolution) {
-		if (!bEnableAutoDynamicResolution->GetBool())
-			logger::info("Forcing DynamicResolution on.");
-		bEnableAutoDynamicResolution->data.b = true;
+	if (!REL::Module::IsVR()) {
+		if (bEnableAutoDynamicResolution) {
+			if (!bEnableAutoDynamicResolution->GetBool())
+				logger::info("Forcing DynamicResolution on.");
+			bEnableAutoDynamicResolution->data.b = true;
+		} else
+			logger::warn("Unable to enable Dynamic Resolution, please enable manually.");
 	}
-	else
-		logger::warn("Unable to enable Dynamic Resolution, please enable manually.");
 }
 
 void DRS::Update()
